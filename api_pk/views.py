@@ -205,6 +205,55 @@ class DefineTerminal(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+class Estelam(APIView):
+    def post(self, request):
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)       
+     
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+        
+        try:
+            # Call Oracle procedure to process JSON data
+            out_param = cursor.var(str)
+            cursor.callproc("MSA_SCHEMA.PKG_ORDER.ESTELAM", [json_str, out_param])
+            connection.commit()
+
+            # Get the response from the Oracle procedure
+            response_data = out_param.getvalue()
+
+            # Parse the Oracle response to extract the desired fields
+            oracle_response = json.loads(response_data)
+            desired_response = {
+                "message": oracle_response["message"],
+                "isError": oracle_response["isError"],
+                "statusCode": oracle_response["statusCode"],
+                "result": {
+                    "status": oracle_response["result"]["status"],
+                    "responseCode": oracle_response["result"]["responseCode"],
+                    "data": {
+                        "rrn": oracle_response["result"]["data"]["rrn"],
+                        "stan": oracle_response["result"]["data"]["stan"],
+                        "orderTrace": oracle_response["result"]["data"]["orderTrace"],
+                        "terminalNumber": oracle_response["result"]["data"]["terminalNumber"],
+                        "creditAmount": oracle_response["result"]["data"]["creditAmount"],
+                        "amount": oracle_response["result"]["data"]["amount"],
+                        "assignedCredits": oracle_response["result"]["data"]["assignedCredits"]
+                    }
+                }
+            }
+            
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            return Response({"error_message": str(error)})
+        finally:
+            cursor.close()
+            connection.close()
+        
+        return Response(desired_response)
+        
+
 class GetItemOrder(APIView):
     def post(self, request):
         json_data = request.data
@@ -216,8 +265,33 @@ class GetItemOrder(APIView):
         
         try:
             # Call Oracle procedure to process JSON data
-            cursor.callproc("MSA_SCHEMA.PKG_ORDER.PROCESS_JSON_DATA", [json_str])
+            out_param = cursor.var(str)
+            cursor.callproc("MSA_SCHEMA.PKG_ORDER.PROCESS_JSON_DATA", [json_str, out_param])
             connection.commit()
+
+            # Get the response from the Oracle procedure
+            response_data = out_param.getvalue()
+
+            # Parse the Oracle response to extract the desired fields
+            oracle_response = json.loads(response_data)
+            desired_response = {
+                "message": oracle_response["message"],
+                "isError": oracle_response["isError"],
+                "statusCode": oracle_response["statusCode"],
+                "result": {
+                    "status": oracle_response["result"]["status"],
+                    "responseCode": oracle_response["result"]["responseCode"],
+                    "data": {
+                        "rrn": oracle_response["result"]["data"]["rrn"],
+                        "stan": oracle_response["result"]["data"]["stan"],
+                        "orderTrace": oracle_response["result"]["data"]["orderTrace"],
+                        "terminalNumber": oracle_response["result"]["data"]["terminalNumber"],
+                        "creditAmount": oracle_response["result"]["data"]["creditAmount"],
+                        "amount": oracle_response["result"]["data"]["amount"],
+                        "assignedCredits": oracle_response["result"]["data"]["assignedCredits"]
+                    }
+                }
+            }
             
         except oracledb.DatabaseError as e:
             error, = e.args
@@ -225,30 +299,251 @@ class GetItemOrder(APIView):
         finally:
             cursor.close()
             connection.close()
-            response = {
-"message": "POST request successful.",
-"isError": False, 
-"statusCode": 200,
-"result": {
-"status": True,
-"responseCode":0,
-"data":{
-"rrn": "123456789012",
-"stan": "123456",
-"orderTrace": "1234567890123",
-"terminalNumber": "12345678",
-"creditAmount": 70000,
-"amount": 100000,
-"assignedCredits": [{
-"commodityCode": "5",
-"commodityName":"ماکارونی",
-"unitCode": "01",
-"unitName" : "گرم",
-"assigedCredit": 2000,
-"currentCredit": 5000
-}]
-}
-}
-}
         
-        return Response({"message": "JSON data processed successfully"})
+        return Response(desired_response)
+    
+
+class ReverseProcessAPIView(APIView):
+
+    def post(self, request):
+        # Assuming you receive the order_id in the request data
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)
+        # Connect to Oracle
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+
+        # Call the REVERSE_ORDER_DISTRIBUTION procedure
+        try:
+            p_response = cursor.var(str)
+            cursor.callproc('PKG_ORDER.REVERSE_ORDER_DISTRIBUTION', [json_str,p_response])
+            response_data = p_response.getvalue()
+            connection.commit()
+            cursor.close()
+            connection.close()
+            response = {
+                "message": "POST request successful.",
+                "isError": False,
+                "statusCode": 200,
+                "result": {
+                    "status": True,
+                    "responseCode": 0,
+                    "data": 'TRUE/FALSE'
+                }
+            }
+
+            # Successful response message
+            return Response(response, status=status.HTTP_200_OK)
+        except oracledb.DatabaseError as error:
+            # Handle database errors
+            return Response({'error': str(error)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+class ConfirmTransaction(APIView):
+
+    def post(self, request):
+
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)
+        # Connect to Oracle
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+
+        try:
+            
+            p_response = cursor.var(str)
+            cursor.callproc("MSA_SCHEMA.PKG_ORDER.CONFIRM_ORDER", [json_str, p_response])
+            response_data = p_response.getvalue()
+
+            response = {
+                "message": "POST request successful.",
+                "isError": False,
+                "statusCode": 200,
+                "result": {
+                    "status": True,
+                    "responseCode": 0,
+                    "data": 'TRUE/FALSE'
+                }
+            }
+
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            return Response({"error_message": str(error)})
+        finally:
+            cursor.close()
+
+        return Response(response)
+    
+
+class Estelam_100(APIView):
+    def post(self, request):
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)       
+     
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+        
+        try:
+            # Call Oracle procedure to process JSON data
+            out_param = cursor.var(str)
+            cursor.callproc("MSA_SCHEMA.PKG_ORDER_RECEIPT.ESTELAM_100_CODE", [json_str, out_param])
+            connection.commit()
+
+            # Get the response from the Oracle procedure
+            response_data = out_param.getvalue()
+
+            # Parse the Oracle response to extract the desired fields
+            oracle_response = json.loads(response_data)
+            desired_response = {
+                "message": oracle_response["message"],
+                "isError": oracle_response["isError"],
+                "statusCode": oracle_response["statusCode"],
+                "result": {
+                    "status": oracle_response["result"]["status"],
+                    "responseCode": oracle_response["result"]["responseCode"],
+                    "data": {
+                        "rrn": oracle_response["result"]["data"]["rrn"],
+                        "stan": oracle_response["result"]["data"]["stan"],
+                        "orderTrace": oracle_response["result"]["data"]["orderTrace"],
+                        "terminalNumber": oracle_response["result"]["data"]["terminalNumber"],
+                        "creditAmount": oracle_response["result"]["data"]["creditAmount"],
+                        "amount": oracle_response["result"]["data"]["amount"],
+                        "assignedCredits": oracle_response["result"]["data"]["assignedCredits"]
+                    }
+                }
+            }
+            
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            return Response({"error_message": str(error)})
+        finally:
+            cursor.close()
+            connection.close()
+        
+        return Response(desired_response)
+    
+
+class ORDER_200_CODE(APIView):
+    def post(self, request):
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)       
+     
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+        
+        try:
+            # Call Oracle procedure to process JSON data
+            out_param = cursor.var(str)
+            cursor.callproc("MSA_SCHEMA.PKG_ORDER_RECEIPT.ORDER_200_CODE", [json_str, out_param])
+            connection.commit()
+
+            # Get the response from the Oracle procedure
+            response_data = out_param.getvalue()
+
+            # Parse the Oracle response to extract the desired fields
+            oracle_response = json.loads(response_data)
+            desired_response = {
+                "message": oracle_response["message"],
+                "isError": oracle_response["isError"],
+                "statusCode": oracle_response["statusCode"],
+                "result": {
+                    "status": oracle_response["result"]["status"],
+                    "responseCode": oracle_response["result"]["responseCode"],
+                    "data": {
+                        "rrn": oracle_response["result"]["data"]["rrn"],
+                        "stan": oracle_response["result"]["data"]["stan"],
+                        "orderTrace": oracle_response["result"]["data"]["orderTrace"],
+                        "terminalNumber": oracle_response["result"]["data"]["terminalNumber"],
+                        "creditAmount": oracle_response["result"]["data"]["creditAmount"],
+                        "amount": oracle_response["result"]["data"]["amount"],
+                        "assignedCredits": oracle_response["result"]["data"]["assignedCredits"]
+                    }
+                }
+            }
+            
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            return Response({"error_message": str(error)})
+        finally:
+            cursor.close()
+            connection.close()
+        
+        return Response(desired_response)
+    
+
+class REVERSE_420_CODE_ORDER(APIView):
+
+    def post(self, request):
+        # Assuming you receive the order_id in the request data
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)
+        # Connect to Oracle
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+
+        # Call the REVERSE_ORDER_DISTRIBUTION procedure
+        try:
+            p_response = cursor.var(str)
+            cursor.callproc('MSA_SCHEMA.PKG_ORDER_RECEIPT.REVERSE_420_CODE_ORDER', [json_str,p_response])
+            response_data = p_response.getvalue()
+            connection.commit()
+            cursor.close()
+            connection.close()
+            response = {
+                "message": "POST request successful.",
+                "isError": False,
+                "statusCode": 200,
+                "result": {
+                    "status": True,
+                    "responseCode": 0,
+                    "data": 'TRUE/FALSE'
+                }
+            }
+
+            # Successful response message
+            return Response(response, status=status.HTTP_200_OK)
+        except oracledb.DatabaseError as error:
+            # Handle database errors
+            return Response({'error': str(error)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class CONFIRM_220_CODE_ORDER(APIView):
+
+    def post(self, request):
+
+        json_data = request.data
+        json_str = json.dumps(json_data)
+        print(json_str)
+        # Connect to Oracle
+        connection = oracledb.connect(user="msa_schema", password="msa_schema", host='10.2.10.20', port=1521, service_name='dbdev')
+        cursor = connection.cursor()
+
+        try:
+            
+            p_response = cursor.var(str)
+            cursor.callproc("MSA_SCHEMA.PKG_ORDER_RECEIPT.CONFIRM_220_CODE_ORDER", [json_str, p_response])
+            response_data = p_response.getvalue()
+
+            response = {
+                "message": "POST request successful.",
+                "isError": False,
+                "statusCode": 200,
+                "result": {
+                    "status": True,
+                    "responseCode": 0,
+                    "data": 'TRUE/FALSE'
+                }
+            }
+
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            return Response({"error_message": str(error)})
+        finally:
+            cursor.close()
+
+        return Response(response)
